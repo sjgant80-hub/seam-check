@@ -1,0 +1,35 @@
+name: seam-check
+description: "you already own this — collapses a PR's intent against your org's own repos and says so before the merge. Advisory by default; nothing leaves your org."
+author: sjgant80-hub
+branding:
+  icon: layers
+  color: yellow
+inputs:
+  org:
+    description: "GitHub org/user whose repos form the shadow (default: the repo's owner)"
+    required: false
+    default: ""
+  fail-on:
+    description: "'none' (advisory, default) or 'already-owned' (fail the check when the org already owns the PR's intent)"
+    required: false
+    default: "none"
+  always-comment:
+    description: "'true' to comment on novel PRs too (default: novel stays silent)"
+    required: false
+    default: "false"
+  shadow:
+    description: "path to a prebuilt shadow.json (skips the API — for private setups and monorepos)"
+    required: false
+    default: ""
+runs:
+  using: composite
+  steps:
+    - name: seam-check — do you already own this?
+      shell: bash
+      run: node "${{ github.action_path }}/run.mjs"
+      env:
+        GH_TOKEN: ${{ github.token }}
+        SEAM_ORG: ${{ inputs.org }}
+        SEAM_FAIL_ON: ${{ inputs.fail-on }}
+        SEAM_ALWAYS_COMMENT: ${{ inputs.always-comment }}
+        SEAM_SHADOW: ${{ inputs.shadow }}

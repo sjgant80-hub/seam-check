@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>seam-check · you already own this</title>
+<meta name="description" content="A GitHub Action that collapses a PR's intent against your org's own repos and says 'you already own this' before the merge. Advisory, deterministic, gated 50/50 before first use. Nothing leaves your org.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ctext y='24' font-size='24' fill='%23e8b84b'%3E%E2%9C%82%3C/text%3E%3C/svg%3E">
+<style>
+/* checkroom: dark utility surface — this is a CI tool, the verdict is the hero */
+:root{
+  --ground:#0d1117; --panel:#161b26; --panel2:#10141d; --line:#262d3d;
+  --ink:#dfe6f2; --dim:#8b96ad; --faint:#5a647a;
+  --amp:#e8b84b; --ok:#69d18c; --mix:#5fd4d0; --new:#8b96ad; --bad:#e06c6c;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+}
+*{box-sizing:border-box;margin:0}
+body{background:var(--ground);color:var(--ink);font-family:var(--sans);line-height:1.55}
+a{color:var(--mix);text-decoration:none} a:hover{text-decoration:underline}
+.wrap{max-width:900px;margin:0 auto;padding:0 20px}
+header{border-bottom:1px solid var(--line);padding:56px 0 40px}
+h1{font-size:clamp(2rem,5.5vw,3rem);letter-spacing:-.02em;font-family:var(--mono)}
+h1 em{color:var(--amp);font-style:normal}
+.sub{color:var(--dim);max-width:44em;margin-top:10px;font-size:1.02rem}
+.badges{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px}
+.badge{font-family:var(--mono);font-size:.78rem;padding:4px 10px;border:1px solid var(--line);border-radius:99px;color:var(--dim)}
+.badge b{color:var(--ok);font-weight:600}
+section{padding:36px 0;border-bottom:1px solid var(--line)}
+h2{font-size:1.05rem;text-transform:uppercase;letter-spacing:.12em;color:var(--amp);margin-bottom:6px}
+.lede{color:var(--dim);max-width:50em;margin-bottom:18px}
+input[type=text],textarea{width:100%;background:var(--panel2);border:1px solid var(--line);border-radius:8px;color:var(--ink);padding:11px 13px;font-size:.95rem;font-family:var(--sans)}
+textarea{min-height:64px;resize:vertical}
+.bar{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;align-items:center}
+button{background:var(--amp);color:#141005;border:0;border-radius:8px;padding:10px 20px;font-weight:700;cursor:pointer;font-size:.95rem}
+button:hover{filter:brightness(1.1)}
+button.ghost{background:transparent;color:var(--mix);border:1px solid var(--line);font-weight:500}
+.chips{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0 4px}
+.chip{font-size:.78rem;border:1px solid var(--line);border-radius:99px;padding:4px 12px;color:var(--dim);cursor:pointer;background:transparent}
+.chip:hover{border-color:var(--mix);color:var(--mix)}
+.shadowline{font-size:.8rem;color:var(--faint);margin-top:8px}
+.verdict{background:var(--panel);border:1px solid var(--line);border-left:4px solid var(--faint);border-radius:10px;padding:16px;margin-top:16px;display:none}
+.verdict.show{display:block}
+.verdict .v{font-family:var(--mono);font-size:.8rem;letter-spacing:.1em;text-transform:uppercase}
+.verdict p{color:var(--dim);margin-top:6px;font-size:.93rem}
+.v-owned{border-left-color:var(--ok)} .v-owned .v{color:var(--ok)}
+.v-partly{border-left-color:var(--mix)} .v-partly .v{color:var(--mix)}
+.v-novel{border-left-color:var(--new)} .v-novel .v{color:var(--new)}
+.v-refused{border-left-color:var(--bad)} .v-refused .v{color:var(--bad)}
+.comment{margin-top:14px;display:none}
+.comment.show{display:block}
+.comment h4,.spec h4{font-family:var(--mono);font-size:.72rem;letter-spacing:.1em;color:var(--faint);margin-bottom:8px;text-transform:uppercase}
+.gh{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:14px 16px;font-size:.9rem}
+.gh .who{font-family:var(--mono);font-size:.78rem;color:var(--faint);margin-bottom:8px}
+.gh b{color:var(--ink)} .gh a{color:var(--mix)}
+.gh .foot{color:var(--faint);font-size:.78rem;font-style:italic;margin-top:10px}
+.spec{margin-top:14px;display:none}
+.spec.show{display:block}
+.row{display:flex;align-items:center;gap:10px;padding:3px 0;font-size:.82rem}
+.row .nm{width:200px;font-family:var(--mono);color:var(--dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.row .track{flex:1;height:9px;background:var(--panel2);border-radius:5px;overflow:hidden}
+.row .fill{height:100%;background:var(--amp);border-radius:5px}
+.row.won .fill{background:var(--ok)}
+.row .val{width:52px;text-align:right;font-family:var(--mono);color:var(--dim)}
+pre{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:14px 16px;overflow-x:auto;font-family:var(--mono);font-size:.82rem;color:var(--ink);line-height:1.6}
+pre .c{color:var(--faint)}
+.copybar{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+.split{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:700px){.split{grid-template-columns:1fr}}
+.half{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:18px}
+.half h3{font-family:var(--mono);font-size:.8rem;letter-spacing:.1em;margin-bottom:10px}
+.half.real h3{color:var(--ok)} .half.limits h3{color:var(--faint)}
+.half ul{list-style:none} .half li{padding:4px 0;color:var(--dim);font-size:.9rem}
+.half.real li::before{content:"✓ ";color:var(--ok)} .half.limits li::before{content:"— ";color:var(--faint)}
+footer{padding:30px 0 46px;color:var(--faint);font-size:.85rem}
+footer a{color:var(--dim)}
+</style>
+</head>
+<body>
+
+<header><div class="wrap">
+  <h1>seam-check <em>· you already own this</em></h1>
+  <p class="sub">A GitHub Action that collapses a pull request's intent against your org's <strong>own repos</strong> — and says so in the thread, before the merge. Teams and their AI tools rebuild what the org already holds; this is the check that was missing. Advisory by default. Deterministic. Nothing leaves your org.</p>
+  <div class="badges">
+    <span class="badge">witness <b>50/50</b> · CLEAN · zero baselines</span>
+    <span class="badge">κ = 0.618 · exact to the bit</span>
+    <span class="badge"><a href="https://github.com/sjgant80-hub/seam-check">source + CI</a></span>
+  </div>
+</div></header>
+
+<section><div class="wrap">
+  <h2>Add it in two minutes</h2>
+  <p class="lede">One step in any workflow. The shadow is built from your org's described repos at run time via the built-in token — or point <code>shadow:</code> at a committed file and skip the API entirely.</p>
+  <pre><span class="c"># .github/workflows/seam-check.yml</span>
+name: seam-check
+on: [pull_request]
+permissions: { contents: read, pull-requests: write }
+jobs:
+  own:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: sjgant80-hub/seam-check@v0.1
+        <span class="c"># with:</span>
+        <span class="c">#   org: your-org            # default: the repo's owner</span>
+        <span class="c">#   fail-on: already-owned   # default: none (advisory)</span>
+        <span class="c">#   always-comment: "true"   # default: novel stays silent</span></pre>
+</div></section>
+
+<section><div class="wrap">
+  <h2>Try the verdict</h2>
+  <p class="lede">This page runs the same gated kernel the Action runs — against a real shadow of 1,400+ described repos. Type a PR title, get the exact comment the Action would post. Or load your own <code>shadow.json</code> (<code>node build-shadow.mjs --org your-org</code>) — it is read in your browser, uploaded nowhere.</p>
+  <div class="chips" id="chips"></div>
+  <input type="text" id="title" placeholder="PR title — what does it do?" aria-label="PR title">
+  <div class="bar" style="margin-top:8px"><textarea id="body" placeholder="PR body (optional — only the first line counts)" aria-label="PR body"></textarea></div>
+  <div class="bar">
+    <button id="go">check</button>
+    <button id="own" class="ghost">load your own shadow.json</button>
+    <input type="file" id="file" accept=".json" style="display:none">
+  </div>
+  <p class="shadowline" id="shadowline"></p>
+  <div class="verdict" id="verdict"></div>
+  <div class="comment" id="comment"></div>
+  <div class="spec" id="spec"></div>
+</div></section>
+
+<section><div class="wrap">
+  <h2>Claims and limits</h2>
+  <div class="split">
+    <div class="half real"><h3>PROVEN — GATED, 50/50</h3><ul>
+      <li>deterministic — same PR, same shadow, same verdict; no model, no mood</li>
+      <li>the κ boundary is exact to the bit: 0.618 owns, 0.617 does not</li>
+      <li>the comment is marker-first — reruns edit one comment, never spam the thread</li>
+      <li>a thin PR title is never a red build; a broken shadow is never a silent green</li>
+      <li>advisory by default; the wall (<code>fail-on</code>) only when your org asks for it</li>
+    </ul></div>
+    <div class="half limits"><h3>NOT CLAIMED</h3><ul>
+      <li>it reads titles and descriptions, not diffs — a mislabelled PR gets a mislabelled answer</li>
+      <li>it cannot see repos your org never described — an undescribed repo is invisible, and the Action says so rather than guessing</li>
+      <li>no learning, no telemetry, no uploads — your shadow is read where it lives</li>
+    </ul></div>
+  </div>
+</div></section>
+
+<section><div class="wrap">
+  <h2>The pair</h2>
+  <p class="lede">Before you merge AI-written code, two questions deserve a deterministic answer: <strong>did it survive its own tests?</strong> — that's <a href="https://github.com/sjgant80-hub/witness">witness</a>, a mutation gate with no dependencies. <strong>And did you already own it?</strong> — that's this. Both run in plain CI, both refuse to guess.</p>
+</div></section>
+
+<footer><div class="wrap">
+  <p>The page runs the real gated kernel inline — view source; what you type is judged by what was witnessed. MIT.</p>
+  <p style="margin-top:6px">Built on the Konomi architecture, created by Thomas Frumkin. Part of the <a href="https://sjgant80-hub.github.io/end-of-software/">end-of-software</a> seam.</p>
+</div></footer>
+
+<script>
+'use strict';
+const RENDER = (() => {
+/*__RENDER_START__*/
+/*__RENDER_END__*/
+return { KAPPA, intentOf };
+})();
+const CHECK = (() => {
+const { intentOf } = RENDER;
+/*__CHECK_START__*/
+/*__CHECK_END__*/
+return { KAPPA, INTENT_CAP, MARKER, prIntent, spectrumOf, decideOwnership, checkOf, commentOf, exitOf };
+})();
+/*__SHADOW_START__*/
+/*__SHADOW_END__*/
+
+const $ = (id) => document.getElementById(id);
+let shadow = SHADOW;
+
+const CHIPS = [
+  'gate my build with mutation and fuzz to kill test theatre',
+  'add a typed knowledge graph with cycle safe traversal',
+  'let users pay an invoice from the dashboard',
+  'teach the parser to fold space and time',
+];
+
+function shadowLine() {
+  $('shadowline').textContent = 'shadow: ' + shadow.folds.length + ' described folds · ' + (shadow.source || 'loaded file') + ' · read in your browser, uploaded nowhere';
+}
+
+function md(text) {
+  return text
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>')
+    .replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>')
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/_([^_]+)_/g, '<span class="foot">$1</span>');
+}
+
+function run() {
+  const r = CHECK.checkOf($('title').value, $('body').value, shadow.folds);
+  const v = $('verdict');
+  v.className = 'verdict show';
+  const cbox = $('comment'), sbox = $('spec');
+  if (!r.ok) {
+    v.classList.add('v-refused');
+    v.innerHTML = '<span class="v">' + (r.neutral ? 'nothing to check' : 'refused') + '</span><p>' + r.why + '</p>';
+    cbox.className = 'comment'; sbox.className = 'spec';
+    return;
+  }
+  v.classList.add(r.verdict === 'already-owned' ? 'v-owned' : r.verdict === 'partly-owned' ? 'v-partly' : 'v-novel');
+  v.innerHTML = '<span class="v">' + r.verdict + '</span><p>' + r.say + '</p>';
+  const cm = CHECK.commentOf(r, false);
+  if (cm.comment) {
+    cbox.className = 'comment show';
+    const stripped = cm.comment.slice(CHECK.MARKER.length + 1);
+    cbox.innerHTML = '<h4>the comment the Action would post</h4><div class="gh"><div class="who">seam-check · bot · would appear on your PR</div>' + stripped.split('\n\n').map((p) => '<p>' + md(p) + '</p>').join('') + '</div>';
+  } else {
+    cbox.className = 'comment show';
+    cbox.innerHTML = '<h4>the comment the Action would post</h4><div class="gh"><div class="who">seam-check · bot</div><p style="color:var(--faint)">— silence. ' + (cm.why || '') + ' (turn on <code>always-comment</code> to speak on novel too)</p></div>';
+  }
+  const top = r.spectrum.slice(0, 8);
+  const max = Math.max(...top.map((s) => s.support), 0.001);
+  sbox.className = 'spec show';
+  sbox.innerHTML = '<h4>the spectrum — top folds by interference</h4>'
+    + top.map((s) => '<div class="row' + ((r.verdict === 'already-owned' && r.fold.name === s.name) ? ' won' : '') + '">'
+      + '<span class="nm">' + s.name + '</span>'
+      + '<span class="track"><span class="fill" style="width:' + Math.round((s.support / max) * 100) + '%"></span></span>'
+      + '<span class="val">' + s.support.toFixed(3) + '</span></div>').join('');
+}
+
+$('chips').innerHTML = CHIPS.map((c, i) => '<button class="chip" data-i="' + i + '">' + c + '</button>').join('');
+for (const el of document.querySelectorAll('.chip')) el.addEventListener('click', () => { $('title').value = CHIPS[+el.getAttribute('data-i')]; $('body').value = ''; run(); });
+$('go').addEventListener('click', run);
+$('title').addEventListener('keydown', (e) => { if (e.key === 'Enter') run(); });
+$('own').addEventListener('click', () => $('file').click());
+$('file').addEventListener('change', (e) => {
+  const f = e.target.files[0];
+  if (!f) return;
+  const rd = new FileReader();
+  rd.onload = () => {
+    try {
+      const j = JSON.parse(rd.result);
+      if (!Array.isArray(j.folds) || j.folds.length === 0) { $('shadowline').textContent = 'refused: that file holds no folds — make one with build-shadow.mjs'; return; }
+      shadow = j; shadowLine();
+      if ($('title').value) run();
+    } catch { $('shadowline').textContent = 'refused: not a shadow.json'; }
+  };
+  rd.readAsText(f);
+});
+shadowLine();
+</script>
+</body>
+</html>

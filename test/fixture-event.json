@@ -1,0 +1,11 @@
+{
+  "pull_request": {
+    "number": 1,
+    "title": "gate my build with mutation and fuzz to kill test theatre",
+    "body": "Kills test theatre in CI.\n\n- [ ] checklist noise that must never drown the signal"
+  },
+  "repository": {
+    "full_name": "sjgant80-hub/seam-check",
+    "owner": { "login": "sjgant80-hub" }
+  }
+}
