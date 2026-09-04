@@ -1,6 +1,8 @@
 # seam-check
 
-**LIVE DEMO: https://sjgant80-hub.github.io/seam-check/**
+**LIVE DEMO: https://sjgant80-hub.github.io/seam-check/** ·
+**see it on a real PR: [#1](https://github.com/sjgant80-hub/seam-check/pull/1)** — the bot's
+first words were "you already own this."
 
 A GitHub Action that collapses a pull request's intent against your org's **own repos** —
 and says **"you already own this"** in the thread, before the merge.
