@@ -1,0 +1,8 @@
+name: seam-check
+on: [pull_request]
+permissions: { contents: read, pull-requests: write }
+jobs:
+  own:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: sjgant80-hub/seam-check@v0.1
